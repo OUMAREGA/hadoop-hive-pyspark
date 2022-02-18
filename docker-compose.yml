@@ -1,0 +1,141 @@
+version: "3"
+
+services:
+
+  namenode:
+    build: 
+      context: ./dockerfiles
+      dockerfile: namenode.Dockerfile
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop-hive.env
+    ports:
+      - "50070:50070"
+    volumes:
+      - ./map_reduce:/map_reduce
+      - ./data:/data
+      - ./snapshots:/snapshots
+
+  datanode:
+    build: 
+      context: ./dockerfiles
+      dockerfile: datanode.Dockerfile 
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070"
+    ports:
+      - "50075:50075"
+  
+  resourcemanager:
+    build: 
+      context: ./dockerfiles
+      dockerfile: resourcemanager.Dockerfile
+    container_name: resourcemanager
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:50070 datanode:50075"
+    env_file:
+      - ./hadoop.env
+
+  nodemanager1:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop2.7.4-java8
+    container_name: nodemanager
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:50070 datanode:50075 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+  
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop2.7.4-java8
+    container_name: historyserver
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:50070 datanode:50075 resourcemanager:8088"
+    volumes:
+      - historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./hadoop.env
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+    ports:
+      - "10000:10000"
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    env_file:
+      - ./hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432"
+    ports:
+      - "9083:9083"
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+
+  spark-master:
+    image: bde2020/spark-master:3.0.1-hadoop3.2
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+       - ./work:/home/jovyan/work
+    environment:
+       - "SPARK_LOCAL_IP=spark-master"
+
+  spark-worker:
+    image: bde2020/spark-worker:3.0.1-hadoop3.2
+
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=3G
+      - SPARK_DRIVER_MEMORY=2G
+      - SPARK_EXECUTOR_MEMORY=2G
+    volumes:
+       - ./work:/home/jovyan/work
+
+  pyspark-notebook:
+    image: jupyter/pyspark-notebook
+    container_name: pyspark_notebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./work:/home/jovyan/work
+
+  cloudera:
+    image: gethue/hue:latest
+    hostname: hue
+    container_name: hue
+    dns: 8.0.2.0
+    ports:
+    - "8020:8020"
+    depends_on: 
+      - namenode
+    volumes:
+      - ./conf/hue.ini:/usr/share/hue/desktop/conf/hue.ini
+  
+  mongodb:
+    image: mongo
+
+volumes:
+  historyserver:
+
+networks: 
+  default:
+    external: 
+      name: hadoop

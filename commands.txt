@@ -1,0 +1,26 @@
+docker-compose exec namenode bash
+hdfs dfs -copyFromLocal data/purchases.txt /user/hadoop/data/air/
+hdfs dfs -cat /user/hadoop/data/air/WHO_AirQuality_Database_2018.csv | more
+hdfs dfs -tail /user/hadoop/data/air/WHO_AirQuality_Database_2018.csv
+hdfs dfs -ls -h /user/hadoop/data/air/
+hdfs fsck /user/hadoop/data/air/WHO_AirQuality_Database_2018.csv -files -blocks
+exit
+
+docker-compose exec hive-server bash
+/opt/hive/bin/beeline -u jdbc:hive2://localhost:10000
+LOAD DATA INPATH '/user/hadoop/data/air/air-data-processed.csv' OVERWRITE INTO TABLE air;
+
+// namenode
+hdfs dfs -ls /user/hive/warehouse/purchase/
+hdfs dfs -ls /user/hadoop/data/air/
+
+// hive
+hive -e 'SET hive.cli.print.header=true; SELECT `country`, `pm10` FROM air | sed 's/[\t]/,/g'  > ./total_purchase_by_item_description.csv
+hive -e 'SET hive.cli.print.header=true; SELECT COUNT(*) AS `total purchase`, `item description` FROM purchase GROUP BY `item description`;' | sed 's/[\t]/,/g'  > ./total_purchase_by_item_description.csv
+
+// namenode
+yarn jar /opt/hadoop-2.7.4/share/hadoop/tools/lib/hadoop-streaming-2.7.4.jar \
+-files /data/mapper.py,/data/reducer.py \
+-mapper ./mapper.py -reducer ./reducer.py \
+-input /user/hadoop/data/purchases/purchases.txt \
+-output /user/hadoop/output-N
