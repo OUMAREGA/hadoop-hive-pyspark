@@ -1,5 +1,5 @@
 docker-compose exec namenode bash
-hdfs dfs -copyFromLocal data/purchases.txt /user/hadoop/data/air/
+hdfs dfs -copyFromLocal data/WHO_AirQuality_Database_2018.csv /user/hadoop/data/air/
 hdfs dfs -cat /user/hadoop/data/air/WHO_AirQuality_Database_2018.csv | more
 hdfs dfs -tail /user/hadoop/data/air/WHO_AirQuality_Database_2018.csv
 hdfs dfs -ls -h /user/hadoop/data/air/
